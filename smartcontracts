@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.9;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
+// Import this file to use console.log
+import "hardhat/console.sol";
+
+
+
+contract CryptoPayments {
+    using SafeMath for uint256;
+
+    uint256 public ownerPercentage;
+    address payable public owner;
+
+    event NewPayment(string txId, address from, address to, address token, uint256 when);
+
+    event TokenRescued(address _token, address recipient, uint amount);
+
+    constructor() payable {
+        owner = payable(msg.sender);
+        ownerPercentage = 5; // 5 = 5%
+    }
+
+    function createPayment(string memory txId, address payable seller, address token , uint tokenValue) public{    
+        uint256 ownerPortion = tokenValue.mul(ownerPercentage).div(100);
+        uint256 sellerPortion = tokenValue - ownerPortion;
+
+        IERC20 _token = IERC20(token);
+        
+        bool transferredToOwner = _token.transferFrom(msg.sender, owner, ownerPortion);
+        bool transferredToSeller = _token.transferFrom(msg.sender, seller, sellerPortion);
+
+        if (transferredToOwner && transferredToSeller){
+            emit NewPayment(txId, msg.sender, seller, token, block.timestamp);
+        }
+    }
+
+    function setOwnerPercentage(uint256 percentage) public {
+        require(msg.sender == owner, "You aren't the owner");
+
+        ownerPercentage = percentage;
+    }
+
+    function setOwner(address newOwner) public {
+        require(msg.sender == owner, "You aren't the owner");
+        owner = payable(newOwner);
+    }
+	
+	function withdrawFunds() public {
+        require(msg.sender == owner, "You aren't the owner");
+        (bool os,) = payable(msg.sender).call{value: address(this).balance}("");
+		require(os);
+    }
+	
+	function rescueToken(address _token, address recipient, uint amount) public {
+		require(msg.sender == owner, "You aren't the owner");
+		bool isTransferred = IERC20(_token).transfer(recipient, amount);
+
+        if (isTransferred){
+            emit TokenRescued(_token, recipient, amount);
+        }
+	}
+	
+}
